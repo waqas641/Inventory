@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BDC-WMS Stock Ageing Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#16221c;
+    --paper:#f6f7f4;
+    --panel:#ffffff;
+    --line:#dde3dc;
+    --line-soft:#e9ece7;
+    --slate:#5b6b62;
+    --brand:#1f5f4d;
+    --brand-dark:#163f34;
+    --brand-soft:#e7f0ec;
+    --amber:#b8791a;
+    --amber-soft:#fbe9cf;
+    --rust:#a63d2e;
+    --rust-soft:#f6ddd6;
+    --mono:'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+    --sans:'IBM Plex Sans', -apple-system, Segoe UI, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:14px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------- Header ---------- */
+  header{
+    background:var(--brand-dark);
+    color:#eef4f1;
+    padding:22px 32px 20px;
+    border-bottom:4px solid var(--brand);
+  }
+  .header-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    gap:24px;
+    flex-wrap:wrap;
+    max-width:1400px;
+    margin:0 auto;
+  }
+  .brand-block h1{
+    margin:0;
+    font-size:22px;
+    font-weight:600;
+    letter-spacing:0.2px;
+  }
+  .brand-block .sub{
+    margin-top:4px;
+    color:#a9c4b8;
+    font-size:13px;
+  }
+  .brand-block .sub b{color:#dcece4;font-weight:600;}
+  .file-controls{
+    display:flex;
+    gap:10px;
+    align-items:center;
+  }
+  .btn{
+    font-family:var(--sans);
+    font-size:13px;
+    font-weight:600;
+    padding:9px 16px;
+    border-radius:3px;
+    border:1px solid transparent;
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    transition:background .12s ease, border-color .12s ease;
+  }
+  .btn-primary{background:#2c7a61;color:#fff;}
+  .btn-primary:hover{background:#33906f;}
+  .btn-outline{background:transparent;color:#dcece4;border-color:#3d5c50;}
+  .btn-outline:hover{border-color:#6f978a;background:#20463b;}
+  #fileInput{display:none;}
+  .sync-status{font-size:12px;font-weight:600;min-width:125px;text-align:center;}
+  .sync-status.ok{color:#b9e2ce;}
+  .sync-status.error{color:#ffb7aa;}
+  .sync-status.loading{color:#f4d59b;}
+  .meta-line{
+    color:#8fac9f;
+    font-size:11.5px;
+    margin-top:10px;
+    max-width:1400px;
+    margin-left:auto;
+    margin-right:auto;
+  }
+
+  /* ---------- Stat strip ---------- */
+  .stat-strip{
+    max-width:1400px;
+    margin:0 auto;
+    padding:20px 32px 0;
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:12px;
+  }
+  .stat{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-left:3px solid var(--brand);
+    padding:12px 16px;
+  }
+  .stat.warn{border-left-color:var(--amber);}
+  .stat.risk{border-left-color:var(--rust);}
+  .stat .num{
+    font-family:var(--mono);
+    font-size:22px;
+    font-weight:600;
+    letter-spacing:-0.5px;
+  }
+  .stat .lbl{
+    font-size:11.5px;
+    color:var(--slate);
+    margin-top:2px;
+  }
+
+  /* ---------- Controls ---------- */
+  .controls{
+    max-width:1400px;
+    margin:18px auto 0;
+    padding:0 32px;
+    display:flex;
+    gap:12px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+  .search-wrap{
+    position:relative;
+    flex:1 1 280px;
+    min-width:220px;
+  }
+  .search-wrap input{
+    width:100%;
+    padding:9px 12px 9px 34px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    font-family:var(--sans);
+    font-size:13.5px;
+    background:var(--panel);
+    color:var(--ink);
+  }
+  .search-wrap input:focus{outline:2px solid var(--brand);outline-offset:-1px;}
+  .search-wrap svg{
+    position:absolute;left:11px;top:50%;transform:translateY(-50%);
+    width:15px;height:15px;stroke:var(--slate);
+  }
+  select{
+    padding:9px 10px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    background:var(--panel);
+    font-family:var(--sans);
+    font-size:13.5px;
+    color:var(--ink);
+  }
+  select:focus{outline:2px solid var(--brand);outline-offset:-1px;}
+  .toggle-group{
+    display:flex;
+    border:1px solid var(--line);
+    border-radius:3px;
+    overflow:hidden;
+  }
+  .toggle-group button{
+    background:var(--panel);
+    border:none;
+    padding:9px 13px;
+    font-family:var(--sans);
+    font-size:13px;
+    font-weight:500;
+    color:var(--slate);
+    cursor:pointer;
+    border-right:1px solid var(--line);
+  }
+  .toggle-group button:last-child{border-right:none;}
+  .toggle-group button.active{background:var(--brand);color:#fff;}
+  .result-count{
+    font-size:12.5px;
+    color:var(--slate);
+    white-space:nowrap;
+  }
+
+  /* ---------- Legend ---------- */
+  .legend{
+    max-width:1400px;
+    margin:14px auto 0;
+    padding:0 32px;
+    display:flex;
+    gap:18px;
+    flex-wrap:wrap;
+    font-size:11.5px;
+    color:var(--slate);
+    align-items:center;
+  }
+  .legend .lg-title{font-weight:600;color:var(--ink);}
+  .swatch{
+    display:inline-flex;align-items:center;gap:6px;
+  }
+  .swatch i{
+    width:11px;height:11px;border-radius:2px;display:inline-block;
+  }
+
+  /* ---------- Table ---------- */
+  .table-wrap{
+    max-width:1400px;
+    margin:14px auto 40px;
+    padding:0 32px;
+  }
+  .table-scroll{
+    border:1px solid var(--line);
+    background:var(--panel);
+    overflow-x:auto;
+    overflow-y:auto;
+    max-height:72vh;
+  }
+  table{
+    width:100%;
+    border-collapse:collapse;
+    min-width:1150px;
+  }
+  thead th{
+    position:sticky;
+    top:0;
+    background:var(--brand-dark);
+    color:#e9f2ee;
+    font-size:11px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.4px;
+    padding:10px 10px;
+    text-align:left;
+    white-space:nowrap;
+    cursor:pointer;
+    z-index:2;
+    border-right:1px solid #2a5346;
+  }
+  thead th:hover{background:#1c5344;}
+  thead th.num{text-align:right;}
+  thead th .arrow{opacity:0.5;font-size:10px;margin-left:3px;}
+  tbody td{
+    padding:9px 10px;
+    border-bottom:1px solid var(--line-soft);
+    white-space:nowrap;
+    font-size:13px;
+  }
+  tbody td.num{
+    text-align:right;
+    font-family:var(--mono);
+  }
+  tbody td.itemname{
+    white-space:normal;
+    min-width:230px;
+    max-width:320px;
+    font-weight:500;
+  }
+  tbody td.code{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--slate);
+  }
+  tbody tr:hover td{background:#f1f5f2;}
+  tbody tr:nth-child(even) td{background:#fafbf9;}
+  tbody tr:nth-child(even):hover td{background:#eef3ef;}
+  tbody tr{cursor:pointer;}
+  tbody tr.pinned td{background:#fdf3cf !important;}
+  tbody tr.pinned:hover td{background:#fbe9ab !important;}
+  tbody tr.pinned td:first-child{box-shadow:inset 3px 0 0 var(--amber);}
+
+  .badge{
+    display:inline-block;
+    padding:2px 8px;
+    border-radius:10px;
+    font-size:11px;
+    font-weight:600;
+  }
+  .badge.local{background:var(--brand-soft);color:var(--brand-dark);}
+  .badge.imported{background:#e5ecf5;color:#2b4a75;}
+
+  .age-cell{
+    text-align:right;
+    font-family:var(--mono);
+    border-radius:2px;
+  }
+  .age-0{color:#3d6b57;}
+  .age-zero{color:#c3cbc5;}
+
+  tfoot td{
+    padding:10px 10px;
+    font-weight:700;
+    font-family:var(--mono);
+    background:var(--brand-soft);
+    border-top:2px solid var(--brand);
+    position:sticky;
+    bottom:0;
+  }
+  tfoot td.itemname{font-family:var(--sans);text-align:left;}
+  tfoot td.num{text-align:right;}
+
+  .empty-state{
+    padding:60px 20px;
+    text-align:center;
+    color:var(--slate);
+  }
+
+  footer{
+    max-width:1400px;
+    margin:0 auto 40px;
+    padding:0 32px;
+    color:var(--slate);
+    font-size:11.5px;
+  }
+
+  @media (max-width:900px){
+    .stat-strip{grid-template-columns:repeat(2,1fr);}
+    header{padding:18px 16px;}
+    .stat-strip,.controls,.legend,.table-wrap,footer{padding-left:16px;padding-right:16px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-row">
+    <div class="brand-block">
+      <h1>BDC-WMS Stock Ageing Dashboard</h1>
+      <div class="sub">Free stock, reserved stock &amp; ageing buckets — <b>BDC-WMS</b> (sellable warehouse)</div>
+    </div>
+    <div class="file-controls">
+      <button class="btn btn-outline" id="syncBtn">Sync now</button>
+      <span class="sync-status" id="syncStatus" aria-live="polite">Not synced yet</span>
+      <button class="btn btn-primary" id="exportBtn">Export view (.xlsx)</button>
+    </div>
+  </div>
+  <div class="meta-line" id="metaLine">Google Sheets data · Branch: BDC-WMS · <span id="loadedCount">138</span> items</div>
+</header>
+
+<div class="stat-strip" id="statStrip"></div>
+
+<div class="controls">
+  <div class="search-wrap">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+    <input type="text" id="searchInput" placeholder="Search item name, barcode or item code…">
+  </div>
+  <select id="subGroupFilter">
+    <option value="">All sub groups</option>
+  </select>
+  <select id="ageingFilter">
+    <option value="">All ageing buckets</option>
+    <option value="0 TO 90 Qty">0 TO 90 Qty</option>
+    <option value="91 TO 150 Qty">91 TO 150 Qty</option>
+    <option value="151 TO 180 Qty">151 TO 180 Qty</option>
+    <option value="181 TO 365 Qty">181 TO 365 Qty</option>
+    <option value="365 Qty to 720 Qty">365 Qty to 720 Qty</option>
+    <option value=">720 Qty">&gt;720 Qty</option>
+  </select>
+  <div class="toggle-group" id="stockToggle">
+    <button data-mode="all" class="active">All stock</button>
+    <button data-mode="free">Free stock only</button>
+    <button data-mode="reserved">Reserved only</button>
+    <button data-mode="aged">Aged &gt;180d</button>
+  </div>
+  <button class="btn btn-outline" id="clearHighlightBtn" style="background:#fff;color:var(--brand-dark);border-color:var(--line);">Clear highlights</button>
+  <div class="result-count" id="resultCount"></div>
+</div>
+
+<div class="legend">
+  <span class="lg-title">Ageing key:</span>
+  <span class="swatch"><i style="background:#eaf3ec"></i>0–90d fresh</span>
+  <span class="swatch"><i style="background:#dcecdf"></i>91–180d</span>
+  <span class="swatch"><i style="background:#fbe9cf"></i>181–365d watch</span>
+  <span class="swatch"><i style="background:#f3cbb8"></i>365–720d slow</span>
+  <span class="swatch"><i style="background:#eeada0"></i>&gt;720d aged risk</span>
+</div>
+
+<div class="table-wrap">
+  <div class="table-scroll">
+    <table id="stockTable">
+      <thead>
+        <tr id="headRow"></tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+      <tfoot>
+        <tr id="footRow"></tr>
+      </tfoot>
+    </table>
+  </div>
+  <div class="empty-state" id="emptyState" style="display:none;">No items match your search or filters.</div>
+</div>
+
+<footer>Reserved stock excluded from Free Stock. Ageing buckets sum to Free Stock for each line. Data is read from the published Google Sheet. Use “Sync now” after updating the sheet.</footer>
+
+<script>
+const RAW_DATA = [{"Item Name": "Houston Tri Fold Mattress 180X90X6 - Bamboo Fabric", "BARCODE": "810806000927", "Item Code": "PO240737", "Sub Group": "Local Mattresses", "Total Qty": 21.0, "Reserved Qty": 0.0, "Free stock": 21.0, "0 TO 90 Qty": 21.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Houston Tri Fold Mattress 180X90X6 - Organic Fabr", "BARCODE": "810806000928", "Item Code": "PO240738", "Sub Group": "Local Mattresses", "Total Qty": 14.0, "Reserved Qty": 0.0, "Free stock": 14.0, "0 TO 90 Qty": 5.0, "91 TO 150 Qty": 9.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Best Bonnell Spring Mattress foam encased with 2 P", "BARCODE": "810806001004", "Item Code": "PO293833", "Sub Group": "Local Mattresses", "Total Qty": 1.0, "Reserved Qty": 1.0, "Free stock": 0.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 1}, {"Item Name": "Cool Gel Memory Foam Bonnell Spring Mattress 150X2", "BARCODE": "810806200038", "Item Code": "PO293867", "Sub Group": "Imported Mattresses", "Total Qty": 6.0, "Reserved Qty": 0.0, "Free stock": 6.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 6, ">720 Qty": 0}, {"Item Name": "Cool Gel Memory Foam Bonnell Spring Mattress 90X19", "BARCODE": "810806200040", "Item Code": "PO293869", "Sub Group": "Imported Mattresses", "Total Qty": 1.0, "Reserved Qty": 0.0, "Free stock": 1.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 1, ">720 Qty": 0}, {"Item Name": "Natural Memory Foam with Pocket Spring Mattress 90", "BARCODE": "810806200041", "Item Code": "PO293870", "Sub Group": "Imported Mattresses", "Total Qty": 4.0, "Reserved Qty": 4.0, "Free stock": 0.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 4}, {"Item Name": "Natural Memory Foam with Pocket Spring Mattress 15", "BARCODE": "810806200043", "Item Code": "PO293872", "Sub Group": "Imported Mattresses", "Total Qty": 7.0, "Reserved Qty": 0.0, "Free stock": 7.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 6, ">720 Qty": 1}, {"Item Name": "Charcoal foam with Pocket Spring Mattress 150X200X", "BARCODE": "810806200048", "Item Code": "PO293877", "Sub Group": "Imported Mattresses", "Total Qty": 1.0, "Reserved Qty": 0.0, "Free stock": 1.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 1, ">720 Qty": 0}, {"Item Name": "Charcoal foam with Pocket Spring Mattress 200X200X", "BARCODE": "810806200050", "Item Code": "PO293879", "Sub Group": "Imported Mattresses", "Total Qty": 2.0, "Reserved Qty": 0.0, "Free stock": 2.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 2, ">720 Qty": 0}, {"Item Name": "Bamboo Foam Mattress 200X200X24", "BARCODE": "810806200055", "Item Code": "PO293887", "Sub Group": "Imported Mattresses", "Total Qty": 3.0, "Reserved Qty": 0.0, "Free stock": 3.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 3}, {"Item Name": "Insight Pocket Spring Mattress 150X200X23", "BARCODE": "810806200078", "Item Code": "PO296046", "Sub Group": "Local Mattresses", "Total Qty": 2.0, "Reserved Qty": 0.0, "Free stock": 2.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 2}, {"Item Name": "Moon Foam Mattress 70 x 130 x 10cm - wrng des", "BARCODE": "810806200119", "Item Code": "PO336796", "Sub Group": "Local Mattresses", "Total Qty": 62.0, "Reserved Qty": 5.0, "Free stock": 57.0, "0 TO 90 Qty": 62.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Cloud gel Memory Foam w/ Pocket Spring Mattress 15", "BARCODE": "811000100016", "Item Code": "PO435212", "Sub Group": "Imported Mattresses", "Total Qty": 21.0, "Reserved Qty": 0.0, "Free stock": 21.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 21, ">720 Qty": 0}, {"Item Name": "Seaqual Gel Memory Foam Mattress 180 x 200 x 25", "BARCODE": "810806200136", "Item Code": "PO435292", "Sub Group": "Imported Mattresses", "Total Qty": 6.0, "Reserved Qty": 0.0, "Free stock": 6.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 6, ">720 Qty": 0}, {"Item Name": "Latex Pillow Top Pocket Spring Mattress 120 X 200", "BARCODE": "810806001043", "Item Code": "PO437530", "Sub Group": "Local Mattresses", "Total Qty": 2.0, "Reserved Qty": 0.0, "Free stock": 2.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 2.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Cozy Double Medical Mattress 120X200X23 - OM", "BARCODE": "810806001122", "Item Code": "PO487630", "Sub Group": "Local Mattresses", "Total Qty": 84.0, "Reserved Qty": 18.0, "Free stock": 66.0, "0 TO 90 Qty": 84.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Cozy Double Medical Mattress 150X200X23 - OM", "BARCODE": "810806001123", "Item Code": "PO487631", "Sub Group": "Local Mattresses", "Total Qty": 34.0, "Reserved Qty": 8.0, "Free stock": 26.0, "0 TO 90 Qty": 34.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Cozy Double Medical Mattress 160X200X23 - OM", "BARCODE": "810806001124", "Item Code": "PO487632", "Sub Group": "Local Mattresses", "Total Qty": 37.0, "Reserved Qty": 4.0, "Free stock": 33.0, "0 TO 90 Qty": 37.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Cozy Double Medical Mattress 180X200X23 - OM", "BARCODE": "810806001125", "Item Code": "PO487633", "Sub Group": "Local Mattresses", "Total Qty": 110.0, "Reserved Qty": 33.0, "Free stock": 77.0, "0 TO 90 Qty": 110.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Cozy Double Medical Mattress 200X200X23 - OM", "BARCODE": "810806001126", "Item Code": "PO487634", "Sub Group": "Local Mattresses", "Total Qty": 13.0, "Reserved Qty": 0.0, "Free stock": 13.0, "0 TO 90 Qty": 13.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Cozy Double Medical Mattress 90X190X23 - OM", "BARCODE": "810806001127", "Item Code": "PO487635", "Sub Group": "Local Mattresses", "Total Qty": 24.0, "Reserved Qty": 24.0, "Free stock": 0.0, "0 TO 90 Qty": 24.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Cozy Double Medical Mattress 90X200X23 - OM", "BARCODE": "810806001128", "Item Code": "PO487636", "Sub Group": "Local Mattresses", "Total Qty": 40.0, "Reserved Qty": 5.0, "Free stock": 35.0, "0 TO 90 Qty": 40.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Diamond Pocket Spring w/ Pillow Top w/ Memory Foam", "BARCODE": "810806001130", "Item Code": "PO487638", "Sub Group": "Local Mattresses", "Total Qty": 6.0, "Reserved Qty": 0.0, "Free stock": 6.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 3.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 3.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Diamond Pocket Spring w/ Pillow Top w/ Memory Foam", "BARCODE": "810806001131", "Item Code": "PO487639", "Sub Group": "Local Mattresses", "Total Qty": 7.0, "Reserved Qty": 0.0, "Free stock": 7.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 3.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 4.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Diamond Pocket Spring w/ Pillow Top w/ Memory Foam", "BARCODE": "810806001132", "Item Code": "PO487640", "Sub Group": "Local Mattresses", "Total Qty": 1.0, "Reserved Qty": 0.0, "Free stock": 1.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 1.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Diamond Pocket Spring w/ Pillow Top w/ Memory Foam", "BARCODE": "810806001133", "Item Code": "PO487641", "Sub Group": "Local Mattresses", "Total Qty": 3.0, "Reserved Qty": 3.0, "Free stock": 0.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 3.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Diamond Pocket Spring w/ Pillow Top w/ Memory Foam", "BARCODE": "810806001134", "Item Code": "PO487642", "Sub Group": "Local Mattresses", "Total Qty": 3.0, "Reserved Qty": 1.0, "Free stock": 2.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 3.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Diamond Pocket Spring w/ Pillow Top w/ Memory Foam", "BARCODE": "810806001135", "Item Code": "PO487643", "Sub Group": "Local Mattresses", "Total Qty": 7.0, "Reserved Qty": 0.0, "Free stock": 7.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 7.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Diamond Pocket Spring w/ Pillow Top w/ Memory Foam", "BARCODE": "810806001136", "Item Code": "PO487644", "Sub Group": "Local Mattresses", "Total Qty": 9.0, "Reserved Qty": 3.0, "Free stock": 6.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 6.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 3, ">720 Qty": 0}, {"Item Name": "Dream Spine Fit Customizable Mattress  15 cm  -  O", "BARCODE": "810806001137", "Item Code": "PO487645", "Sub Group": "Local Mattresses", "Total Qty": 1e-05, "Reserved Qty": 0.0, "Free stock": 1e-05, "0 TO 90 Qty": 1e-05, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Dream Spine Fit Mattress 120X200X15 - Cream - OM", "BARCODE": "810806001138", "Item Code": "PO487646", "Sub Group": "Local Mattresses", "Total Qty": 55.0, "Reserved Qty": 12.0, "Free stock": 43.0, "0 TO 90 Qty": 55.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Dream Spine Fit Mattress 150X200X15 - Cream - OM", "BARCODE": "810806001139", "Item Code": "PO487647", "Sub Group": "Local Mattresses", "Total Qty": 15.0, "Reserved Qty": 3.0, "Free stock": 12.0, "0 TO 90 Qty": 8.0, "91 TO 150 Qty": 7.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Dream Spine Fit Mattress 160X200X15 - Cream - OM", "BARCODE": "810806001140", "Item Code": "PO487648", "Sub Group": "Local Mattresses", "Total Qty": 4.0, "Reserved Qty": 2.0, "Free stock": 2.0, "0 TO 90 Qty": 4.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Dream Spine Fit Mattress 180X200X15 - Cream - OM", "BARCODE": "810806001141", "Item Code": "PO487649", "Sub Group": "Local Mattresses", "Total Qty": 35.0, "Reserved Qty": 10.0, "Free stock": 25.0, "0 TO 90 Qty": 35.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Dream Spine Fit Mattress 200X200X15 - Cream - OM", "BARCODE": "810806001142", "Item Code": "PO487650", "Sub Group": "Local Mattresses", "Total Qty": 11.0, "Reserved Qty": 2.0, "Free stock": 9.0, "0 TO 90 Qty": 11.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Dream Spine Fit Mattress 90X190X15 - Cream - OM", "BARCODE": "810806001143", "Item Code": "PO487651", "Sub Group": "Local Mattresses", "Total Qty": 22.0, "Reserved Qty": 1.0, "Free stock": 21.0, "0 TO 90 Qty": 22.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Dream Spine Fit Mattress 90X200X15 - Cream - OM", "BARCODE": "810806001144", "Item Code": "PO487652", "Sub Group": "Local Mattresses", "Total Qty": 41.0, "Reserved Qty": 14.0, "Free stock": 27.0, "0 TO 90 Qty": 41.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Five Star Pocket Spring w/ Gel Memory Foam  Custom", "BARCODE": "810806001145", "Item Code": "PO487653", "Sub Group": "Local Mattresses", "Total Qty": 4.0, "Reserved Qty": 4.0, "Free stock": 0.0, "0 TO 90 Qty": 4.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Five Star Pocket Spring w/ Gel Memory Foam Mattres", "BARCODE": "810806001146", "Item Code": "PO487654", "Sub Group": "Local Mattresses", "Total Qty": 7.0, "Reserved Qty": 0.0, "Free stock": 7.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 3.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 4.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Five Star Pocket Spring w/ Gel Memory Foam Mattres", "BARCODE": "810806001147", "Item Code": "PO487655", "Sub Group": "Local Mattresses", "Total Qty": 7.0, "Reserved Qty": 0.0, "Free stock": 7.0, "0 TO 90 Qty": 5.0, "91 TO 150 Qty": 2.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Five Star Pocket Spring w/ Gel Memory Foam Mattres", "BARCODE": "810806001148", "Item Code": "PO487656", "Sub Group": "Local Mattresses", "Total Qty": 25.0, "Reserved Qty": 7.0, "Free stock": 18.0, "0 TO 90 Qty": 25.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Five Star Pocket Spring w/ Gel Memory Foam Mattres", "BARCODE": "810806001149", "Item Code": "PO487657", "Sub Group": "Local Mattresses", "Total Qty": 2.0, "Reserved Qty": 0.0, "Free stock": 2.0, "0 TO 90 Qty": 2.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Five Star Pocket Spring w/ Gel Memory Foam Mattres", "BARCODE": "810806001150", "Item Code": "PO487658", "Sub Group": "Local Mattresses", "Total Qty": 7.0, "Reserved Qty": 1.0, "Free stock": 6.0, "0 TO 90 Qty": 5.0, "91 TO 150 Qty": 2.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Five Star Pocket Spring w/ Gel Memory Foam Mattres", "BARCODE": "810806001151", "Item Code": "PO487659", "Sub Group": "Local Mattresses", "Total Qty": 52.0, "Reserved Qty": 7.0, "Free stock": 45.0, "0 TO 90 Qty": 52.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Five Star Pocket Spring w/ Gel Memory Foam Mattres", "BARCODE": "810806001152", "Item Code": "PO487660", "Sub Group": "Local Mattresses", "Total Qty": 10.0, "Reserved Qty": 5.0, "Free stock": 5.0, "0 TO 90 Qty": 10.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Freeze Cool Medicated  Mattress -  120 X 200  x 23", "BARCODE": "810806001153", "Item Code": "PO487661", "Sub Group": "Local Mattresses", "Total Qty": 10.0, "Reserved Qty": 2.0, "Free stock": 8.0, "0 TO 90 Qty": 10.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Freeze Cool Medicated  Mattress -  150 X 200  x 23", "BARCODE": "810806001154", "Item Code": "PO487662", "Sub Group": "Local Mattresses", "Total Qty": 7.0, "Reserved Qty": 0.0, "Free stock": 7.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 7.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Freeze Cool Medicated  Mattress -  160 X 200  x 23", "BARCODE": "810806001155", "Item Code": "PO487663", "Sub Group": "Local Mattresses", "Total Qty": 6.0, "Reserved Qty": 2.0, "Free stock": 4.0, "0 TO 90 Qty": 5.0, "91 TO 150 Qty": 1.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Freeze Cool Medicated  Mattress -  180 X 200  x 23", "BARCODE": "810806001156", "Item Code": "PO487664", "Sub Group": "Local Mattresses", "Total Qty": 16.0, "Reserved Qty": 12.0, "Free stock": 4.0, "0 TO 90 Qty": 16.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Freeze Cool Medicated  Mattress-   90 x 190 x 23cm", "BARCODE": "810806001157", "Item Code": "PO487665", "Sub Group": "Local Mattresses", "Total Qty": 6.0, "Reserved Qty": 0.0, "Free stock": 6.0, "0 TO 90 Qty": 6.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Freeze Cool Medicated  Mattress-   90 x 200 x 23cm", "BARCODE": "810806001158", "Item Code": "PO487666", "Sub Group": "Local Mattresses", "Total Qty": 12.0, "Reserved Qty": 0.0, "Free stock": 12.0, "0 TO 90 Qty": 12.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Freeze Cool Medicated  Mattress- 200 X 200  x 23cm", "BARCODE": "810806001159", "Item Code": "PO487667", "Sub Group": "Local Mattresses", "Total Qty": 11.0, "Reserved Qty": 4.0, "Free stock": 7.0, "0 TO 90 Qty": 11.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Freeze Cool Medicated Customizable Mattress  23 cm", "BARCODE": "810806001160", "Item Code": "PO487668", "Sub Group": "Local Mattresses", "Total Qty": 11.2, "Reserved Qty": 7.2, "Free stock": 3.999999999999999, "0 TO 90 Qty": 11.2, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Gel Pocket Spring & Memory Foam Mattress 120X200X2", "BARCODE": "810806001162", "Item Code": "PO487670", "Sub Group": "Local Mattresses", "Total Qty": 30.0, "Reserved Qty": 7.0, "Free stock": 23.0, "0 TO 90 Qty": 30.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Gel Pocket Spring & Memory Foam Mattress 150X200X2", "BARCODE": "810806001163", "Item Code": "PO487671", "Sub Group": "Local Mattresses", "Total Qty": 9.0, "Reserved Qty": 3.0, "Free stock": 6.0, "0 TO 90 Qty": 8.0, "91 TO 150 Qty": 1.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Gel Pocket Spring & Memory Foam Mattress 160X200X2", "BARCODE": "810806001164", "Item Code": "PO487672", "Sub Group": "Local Mattresses", "Total Qty": 8.0, "Reserved Qty": 2.0, "Free stock": 6.0, "0 TO 90 Qty": 8.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Gel Pocket Spring & Memory Foam Mattress 180X200X2", "BARCODE": "810806001165", "Item Code": "PO487673", "Sub Group": "Local Mattresses", "Total Qty": 49.0, "Reserved Qty": 11.0, "Free stock": 38.0, "0 TO 90 Qty": 49.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Gel Pocket Spring & Memory Foam Mattress 200X200X2", "BARCODE": "810806001166", "Item Code": "PO487674", "Sub Group": "Local Mattresses", "Total Qty": 10.0, "Reserved Qty": 3.0, "Free stock": 7.0, "0 TO 90 Qty": 10.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Gel Pocket Spring & Memory Foam Mattress 90X190X25", "BARCODE": "810806001167", "Item Code": "PO487675", "Sub Group": "Local Mattresses", "Total Qty": 5.0, "Reserved Qty": 0.0, "Free stock": 5.0, "0 TO 90 Qty": 5.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Gel Pocket Spring & Memory Foam Mattress 90X200X25", "BARCODE": "810806001168", "Item Code": "PO487676", "Sub Group": "Local Mattresses", "Total Qty": 3.0, "Reserved Qty": 0.0, "Free stock": 3.0, "0 TO 90 Qty": 3.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Golden Pocket Spring Mattress -\u00a0 150 X 200\u00a0 x 25cm", "BARCODE": "810806001171", "Item Code": "PO487679", "Sub Group": "Local Mattresses", "Total Qty": 4.0, "Reserved Qty": 4.0, "Free stock": 0.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 4}, {"Item Name": "iSleep Bonnel Spring Mattress with 1 Pillow Free\u00a0", "BARCODE": "810806001177", "Item Code": "PO487685", "Sub Group": "Local Mattresses", "Total Qty": 75.0, "Reserved Qty": 57.0, "Free stock": 18.0, "0 TO 90 Qty": 75.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "iSleep Bonnel Spring Mattress with 1 Pillow Free\u00a0", "BARCODE": "810806001178", "Item Code": "PO487686", "Sub Group": "Local Mattresses", "Total Qty": 26.0, "Reserved Qty": 7.0, "Free stock": 19.0, "0 TO 90 Qty": 26.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "iSleep Bonnel Spring Mattress with 1 Pillow Free\u00a0", "BARCODE": "810806001179", "Item Code": "PO487687", "Sub Group": "Local Mattresses", "Total Qty": 24.0, "Reserved Qty": 0.0, "Free stock": 24.0, "0 TO 90 Qty": 24.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "iSleep Bonnel Spring Mattress with 1 Pillow Free\u00a0", "BARCODE": "810806001180", "Item Code": "PO487688", "Sub Group": "Local Mattresses", "Total Qty": 18.0, "Reserved Qty": 7.0, "Free stock": 11.0, "0 TO 90 Qty": 18.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "iSleep Bonnel Spring Mattress with 2 Pillow Free\u00a0", "BARCODE": "810806001181", "Item Code": "PO487689", "Sub Group": "Local Mattresses", "Total Qty": 26.0, "Reserved Qty": 3.0, "Free stock": 23.0, "0 TO 90 Qty": 25.0, "91 TO 150 Qty": 1.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "iSleep Bonnel Spring Mattress with 2 Pillow Free\u00a0", "BARCODE": "810806001182", "Item Code": "PO487690", "Sub Group": "Local Mattresses", "Total Qty": 60.0, "Reserved Qty": 10.0, "Free stock": 50.0, "0 TO 90 Qty": 60.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "iSleep Bonnel Spring Mattress with 2 Pillow Free\u00a0", "BARCODE": "810806001183", "Item Code": "PO487691", "Sub Group": "Local Mattresses", "Total Qty": 18.0, "Reserved Qty": 2.0, "Free stock": 16.0, "0 TO 90 Qty": 18.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Magnum Bonnel Spring Mattress -\u00a0 120 X 200\u00a0 x 25cm", "BARCODE": "810806001186", "Item Code": "PO487694", "Sub Group": "Local Mattresses", "Total Qty": 17.0, "Reserved Qty": 4.0, "Free stock": 13.0, "0 TO 90 Qty": 17.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Magnum Bonnel Spring Mattress -\u00a0 150 X 200\u00a0 x 25cm", "BARCODE": "810806001187", "Item Code": "PO487695", "Sub Group": "Local Mattresses", "Total Qty": 14.0, "Reserved Qty": 0.0, "Free stock": 14.0, "0 TO 90 Qty": 14.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Magnum Bonnel Spring Mattress -\u00a0 180 X 200\u00a0 x 25cm", "BARCODE": "810806001188", "Item Code": "PO487696", "Sub Group": "Local Mattresses", "Total Qty": 14.0, "Reserved Qty": 5.0, "Free stock": 9.0, "0 TO 90 Qty": 14.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Magnum Bonnel Spring Mattress- \u00a0 90 x 190 x 25cm -", "BARCODE": "810806001189", "Item Code": "PO487697", "Sub Group": "Local Mattresses", "Total Qty": 2.0, "Reserved Qty": 1.0, "Free stock": 1.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 2.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Magnum Bonnel Spring Mattress- \u00a0 90 x 200 x 25cm -", "BARCODE": "810806001190", "Item Code": "PO487698", "Sub Group": "Local Mattresses", "Total Qty": 6.0, "Reserved Qty": 4.0, "Free stock": 2.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 6.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Magnum Bonnel Spring Mattress- 160 X 200\u00a0 x 25cm -", "BARCODE": "810806001191", "Item Code": "PO487699", "Sub Group": "Local Mattresses", "Total Qty": 5.0, "Reserved Qty": 2.0, "Free stock": 3.0, "0 TO 90 Qty": 5.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Magnum Bonnel Spring Mattress- 200 X 200\u00a0 x 25cm -", "BARCODE": "810806001192", "Item Code": "PO487700", "Sub Group": "Local Mattresses", "Total Qty": 12.0, "Reserved Qty": 1.0, "Free stock": 11.0, "0 TO 90 Qty": 12.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Nature Pocket Spring & Latex Mattress 150X200X25 -", "BARCODE": "810806001194", "Item Code": "PO487702", "Sub Group": "Local Mattresses", "Total Qty": 6.0, "Reserved Qty": 0.0, "Free stock": 6.0, "0 TO 90 Qty": 5.0, "91 TO 150 Qty": 1.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Nature Pocket Spring & Latex Mattress 160X200X25 -", "BARCODE": "810806001195", "Item Code": "PO487703", "Sub Group": "Local Mattresses", "Total Qty": 8.0, "Reserved Qty": 4.0, "Free stock": 4.0, "0 TO 90 Qty": 8.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Nature Pocket Spring & Latex Mattress 180X200X25 -", "BARCODE": "810806001196", "Item Code": "PO487704", "Sub Group": "Local Mattresses", "Total Qty": 72.0, "Reserved Qty": 18.0, "Free stock": 54.0, "0 TO 90 Qty": 72.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Nature Pocket Spring & Latex Mattress 200X200X25 -", "BARCODE": "810806001197", "Item Code": "PO487705", "Sub Group": "Local Mattresses", "Total Qty": 8.0, "Reserved Qty": 1.0, "Free stock": 7.0, "0 TO 90 Qty": 8.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Nature Pocket Spring & Latex Mattress 90X190X25 -", "BARCODE": "810806001198", "Item Code": "PO487706", "Sub Group": "Local Mattresses", "Total Qty": 7.0, "Reserved Qty": 2.0, "Free stock": 5.0, "0 TO 90 Qty": 5.0, "91 TO 150 Qty": 2.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Nature Pocket Spring & Latex Mattress 90X200X25 -", "BARCODE": "810806001199", "Item Code": "PO487707", "Sub Group": "Local Mattresses", "Total Qty": 10.0, "Reserved Qty": 0.0, "Free stock": 10.0, "0 TO 90 Qty": 10.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Nature Pocket Spring & Latex Mattress120X200X25 -", "BARCODE": "810806001200", "Item Code": "PO487708", "Sub Group": "Local Mattresses", "Total Qty": 11.0, "Reserved Qty": 9.0, "Free stock": 2.0, "0 TO 90 Qty": 11.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Prime Bonnel Spring Mattress - \u00a0 90 x 190 x 21cm -", "BARCODE": "810806001201", "Item Code": "PO487709", "Sub Group": "Local Mattresses", "Total Qty": 13.0, "Reserved Qty": 8.0, "Free stock": 5.0, "0 TO 90 Qty": 13.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Prime Bonnel Spring Mattress - \u00a0 90 x 200 x 21cm -", "BARCODE": "810806001202", "Item Code": "PO487710", "Sub Group": "Local Mattresses", "Total Qty": 25.0, "Reserved Qty": 21.0, "Free stock": 4.0, "0 TO 90 Qty": 25.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Prime Bonnel Spring Mattress - 160 X 200\u00a0 x 21cm -", "BARCODE": "810806001203", "Item Code": "PO487711", "Sub Group": "Local Mattresses", "Total Qty": 28.0, "Reserved Qty": 7.0, "Free stock": 21.0, "0 TO 90 Qty": 28.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Prime Bonnel Spring Mattress - 180 X 200\u00a0 x 21cm -", "BARCODE": "810806001204", "Item Code": "PO487712", "Sub Group": "Local Mattresses", "Total Qty": 68.0, "Reserved Qty": 16.0, "Free stock": 52.0, "0 TO 90 Qty": 68.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Prime Bonnel Spring Mattress - 200 X 200\u00a0 x 21cm -", "BARCODE": "810806001205", "Item Code": "PO487713", "Sub Group": "Local Mattresses", "Total Qty": 8.0, "Reserved Qty": 0.0, "Free stock": 8.0, "0 TO 90 Qty": 8.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Prime Bonnel Spring Mattress -\u00a0 120 X 200\u00a0 x 21cm", "BARCODE": "810806001206", "Item Code": "PO487714", "Sub Group": "Local Mattresses", "Total Qty": 63.0, "Reserved Qty": 36.0, "Free stock": 27.0, "0 TO 90 Qty": 63.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Prime Bonnel Spring Mattress -\u00a0 150 X 200\u00a0 x 21cm", "BARCODE": "810806001207", "Item Code": "PO487715", "Sub Group": "Local Mattresses", "Total Qty": 19.0, "Reserved Qty": 19.0, "Free stock": 0.0, "0 TO 90 Qty": 15.0, "91 TO 150 Qty": 4.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Prime Bonnell Spring Side Encased Customizable Mat", "BARCODE": "810806001208", "Item Code": "PO487716", "Sub Group": "Local Mattresses", "Total Qty": 11.505, "Reserved Qty": 11.505, "Free stock": 0.0, "0 TO 90 Qty": 11.505, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Ortho Hr foam 7 Zone latex Pocket Spring - 180 x 2", "BARCODE": "810806200183", "Item Code": "PO491574", "Sub Group": "Imported Mattresses", "Total Qty": 1.0, "Reserved Qty": 1.0, "Free stock": 0.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 1, ">720 Qty": 0}, {"Item Name": "iMattress Im Ntbox B-9H26 - 90 x 190 x 26", "BARCODE": "810806001298", "Item Code": "PO491614", "Sub Group": "Local Mattresses", "Total Qty": 8.0, "Reserved Qty": 0.0, "Free stock": 8.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 8.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "iMattress Im Ntbox B-9H26 - 90 x 200 x 26", "BARCODE": "810806001299", "Item Code": "PO491615", "Sub Group": "Local Mattresses", "Total Qty": 10.0, "Reserved Qty": 1.0, "Free stock": 9.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 10.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "iMattress Im Ntbox B-9H26 - 120 x 200 x 26", "BARCODE": "810806001300", "Item Code": "PO491616", "Sub Group": "Local Mattresses", "Total Qty": 7.0, "Reserved Qty": 0.0, "Free stock": 7.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 7.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "iMattress Im Ntbox B-9H26 - 150 x 200 x 26", "BARCODE": "810806001301", "Item Code": "PO491617", "Sub Group": "Local Mattresses", "Total Qty": 8.0, "Reserved Qty": 0.0, "Free stock": 8.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 8.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "iMattress Im Ntbox B-9H26 - 160 x 200 x 26", "BARCODE": "810806001302", "Item Code": "PO491618", "Sub Group": "Local Mattresses", "Total Qty": 1.0, "Reserved Qty": 1.0, "Free stock": 0.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 1.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "iMattress Im Ntbox B-9H26 - 180 x 200 x 26", "BARCODE": "810806001303", "Item Code": "PO491619", "Sub Group": "Local Mattresses", "Total Qty": 6.0, "Reserved Qty": 2.0, "Free stock": 4.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 6.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Flexible single foam six fold travel mattress with", "BARCODE": "810806001314", "Item Code": "PO491630", "Sub Group": "Local Mattresses", "Total Qty": 14.0, "Reserved Qty": 0.0, "Free stock": 14.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 14.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Zip Single trifold guest and travel foam mattress", "BARCODE": "810806001315", "Item Code": "PO491631", "Sub Group": "Local Mattresses", "Total Qty": 12.0, "Reserved Qty": 1.0, "Free stock": 11.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 12.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Strawberry Toddler  Extendable Mattress \u2013 90 x 200", "BARCODE": "810800700028", "Item Code": "PO497214", "Sub Group": "Local Mattresses", "Total Qty": 13.0, "Reserved Qty": 0.0, "Free stock": 13.0, "0 TO 90 Qty": 5.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 8.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Supreme Luxury Bonnel Reversible Side Encased Matt", "BARCODE": "810806001360", "Item Code": "PO504559", "Sub Group": "Local Mattresses", "Total Qty": 1.0, "Reserved Qty": 1.0, "Free stock": 0.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 1, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Royal Pillow Top Bonnel Side Encased Mattress 90x1", "BARCODE": "810806001362", "Item Code": "PO504561", "Sub Group": "Local Mattresses", "Total Qty": 17.0, "Reserved Qty": 0.0, "Free stock": 17.0, "0 TO 90 Qty": 17.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Royal Pillow Top Bonnel Side Encased Mattress 90x2", "BARCODE": "810806001363", "Item Code": "PO504562", "Sub Group": "Local Mattresses", "Total Qty": 11.0, "Reserved Qty": 1.0, "Free stock": 10.0, "0 TO 90 Qty": 11.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Royal Pillow Top Bonnel Side Encased Mattress 120x", "BARCODE": "810806001364", "Item Code": "PO504563", "Sub Group": "Local Mattresses", "Total Qty": 11.0, "Reserved Qty": 11.0, "Free stock": 0.0, "0 TO 90 Qty": 11.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Royal Pillow Top Bonnel Side Encased Mattress 150x", "BARCODE": "810806001365", "Item Code": "PO504564", "Sub Group": "Local Mattresses", "Total Qty": 1.0, "Reserved Qty": 0.0, "Free stock": 1.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 1.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Royal Pillow Top Bonnel Side Encased Mattress 150x", "BARCODE": "810806001365", "Item Code": "PO504564", "Sub Group": "Local Mattresses", "Total Qty": 8.0, "Reserved Qty": 2.0, "Free stock": 6.0, "0 TO 90 Qty": 8.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Royal Pillow Top Bonnel Side Encased Mattress 180x", "BARCODE": "810806001366", "Item Code": "PO504565", "Sub Group": "Local Mattresses", "Total Qty": 97.0, "Reserved Qty": 19.0, "Free stock": 78.0, "0 TO 90 Qty": 97.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Royal Pillow Top Bonnel Side Encased Mattress 200x", "BARCODE": "810806001367", "Item Code": "PO504566", "Sub Group": "Local Mattresses", "Total Qty": 3.0, "Reserved Qty": 3.0, "Free stock": 0.0, "0 TO 90 Qty": 3.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Gold Comfort Pocket Spring Mattress90x200x24 cm", "BARCODE": "810806001369", "Item Code": "PO504568", "Sub Group": "Local Mattresses", "Total Qty": 1.0, "Reserved Qty": 1.0, "Free stock": 0.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 1, ">720 Qty": 0}, {"Item Name": "Gold Comfort Pocket Spring Mattress 150x200x24 cm", "BARCODE": "810806001371", "Item Code": "PO504570", "Sub Group": "Local Mattresses", "Total Qty": 1.0, "Reserved Qty": 0.0, "Free stock": 1.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 1.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Gold Comfort Pocket Spring Mattress 180x200x24 cm", "BARCODE": "810806001372", "Item Code": "PO504571", "Sub Group": "Local Mattresses", "Total Qty": 22.0, "Reserved Qty": 3.0, "Free stock": 19.0, "0 TO 90 Qty": 22.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Royal Pillow Top Bonnel Side Encased Customized Ma", "BARCODE": "810806001375", "Item Code": "PO504574", "Sub Group": "Local Mattresses", "Total Qty": 182.8, "Reserved Qty": 182.8, "Free stock": 0.0, "0 TO 90 Qty": 21.58, "91 TO 150 Qty": 53.005, "151 TO 180 Qty": 0, "181 TO 365 Qty": 108.215, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Gliter visco memory foam & latex box top pocket Sp", "BARCODE": "810806001416", "Item Code": "PO505295", "Sub Group": "Local Mattresses", "Total Qty": 5.0, "Reserved Qty": 5.0, "Free stock": 0.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 5, ">720 Qty": 0}, {"Item Name": "Gliter visco memory foam & latex box top pocket Sp", "BARCODE": "810806001417", "Item Code": "PO505296", "Sub Group": "Local Mattresses", "Total Qty": 3.0, "Reserved Qty": 3.0, "Free stock": 0.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 3, ">720 Qty": 0}, {"Item Name": "Gliter visco memory foam & latex box top pocket Sp", "BARCODE": "810806001418", "Item Code": "PO505297", "Sub Group": "Local Mattresses", "Total Qty": 3.0, "Reserved Qty": 3.0, "Free stock": 0.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 3, ">720 Qty": 0}, {"Item Name": "Thriplet three feel reversible HR foam mattress 20", "BARCODE": "810806001420", "Item Code": "PO505299", "Sub Group": "Local Mattresses", "Total Qty": 1.0, "Reserved Qty": 1.0, "Free stock": 0.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 1, ">720 Qty": 0}, {"Item Name": "Thriplet three feel reversible HR foam mattress 15", "BARCODE": "810806001421", "Item Code": "PO505300", "Sub Group": "Local Mattresses", "Total Qty": 5.0, "Reserved Qty": 5.0, "Free stock": 0.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 5, ">720 Qty": 0}, {"Item Name": "Thriplet three feel reversible HR foam mattress 18", "BARCODE": "810806001422", "Item Code": "PO505301", "Sub Group": "Local Mattresses", "Total Qty": 1.0, "Reserved Qty": 1.0, "Free stock": 0.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 1, ">720 Qty": 0}, {"Item Name": "Gliter visco memory foam & latex box top pocket Sp", "BARCODE": "810806001430", "Item Code": "PO506883", "Sub Group": "Local Mattresses", "Total Qty": 4.0, "Reserved Qty": 4.0, "Free stock": 0.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 4, ">720 Qty": 0}, {"Item Name": "Heatless New 7 Zone hybrid Gel Memory Foam - 90x19", "BARCODE": "810806200192", "Item Code": "PO508105", "Sub Group": "Imported Mattresses", "Total Qty": 3.0, "Reserved Qty": 0.0, "Free stock": 3.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 3, ">720 Qty": 0}, {"Item Name": "Ortho New Hr foam 7 Zone latex Pocket Spring - 150", "BARCODE": "810806200205", "Item Code": "PO508118", "Sub Group": "Imported Mattresses", "Total Qty": 6.0, "Reserved Qty": 0.0, "Free stock": 6.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 6, ">720 Qty": 0}, {"Item Name": "Natural New Memory Foam with Pocket Spring Mattres", "BARCODE": "810806200210", "Item Code": "PO508123", "Sub Group": "Imported Mattresses", "Total Qty": 2.0, "Reserved Qty": 0.0, "Free stock": 2.0, "0 TO 90 Qty": 0.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 2, ">720 Qty": 0}, {"Item Name": "Angela 120X200 Upholstered fabric Base - Grey", "BARCODE": "810806001472", "Item Code": "PO514655", "Sub Group": "Local Mattresses", "Total Qty": 2.0, "Reserved Qty": 2.0, "Free stock": 0.0, "0 TO 90 Qty": 2.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Cadbury 120X200 Upholstered headboard - Dark Beige", "BARCODE": "810806001474", "Item Code": "PO514657", "Sub Group": "Local Mattresses", "Total Qty": 2.0, "Reserved Qty": 2.0, "Free stock": 0.0, "0 TO 90 Qty": 2.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Panda Toddler Nursery Foam Mattress with zip chain", "BARCODE": "810806001479", "Item Code": "PO517231", "Sub Group": "Local Mattresses", "Total Qty": 10.0, "Reserved Qty": 0.0, "Free stock": 10.0, "0 TO 90 Qty": 10.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Boat Kids Foam Mattress 90X200x17Cm", "BARCODE": "810806001480", "Item Code": "PO517232", "Sub Group": "Local Mattresses", "Total Qty": 6.0, "Reserved Qty": 0.0, "Free stock": 6.0, "0 TO 90 Qty": 6.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Trundle Foam Mattress 190X90X15Cm", "BARCODE": "810806001481", "Item Code": "PO517233", "Sub Group": "Local Mattresses", "Total Qty": 10.0, "Reserved Qty": 1.0, "Free stock": 9.0, "0 TO 90 Qty": 10.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Bunk Bed Foam Mattress 90X200X15Cm", "BARCODE": "810806001482", "Item Code": "PO517234", "Sub Group": "Local Mattresses", "Total Qty": 4.0, "Reserved Qty": 0.0, "Free stock": 4.0, "0 TO 90 Qty": 4.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Boat Kids Foam Mattress 120X200X17Cm", "BARCODE": "810806001483", "Item Code": "PO517235", "Sub Group": "Local Mattresses", "Total Qty": 5.0, "Reserved Qty": 1.0, "Free stock": 4.0, "0 TO 90 Qty": 5.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Fish Kids Bonnell Spring Mattres 90X200X19Cm", "BARCODE": "810806001484", "Item Code": "PO517236", "Sub Group": "Local Mattresses", "Total Qty": 4.0, "Reserved Qty": 0.0, "Free stock": 4.0, "0 TO 90 Qty": 4.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Student Teens Foam Mattress 90x2000X19Cm", "BARCODE": "810806001485", "Item Code": "PO517237", "Sub Group": "Local Mattresses", "Total Qty": 5.0, "Reserved Qty": 0.0, "Free stock": 5.0, "0 TO 90 Qty": 5.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Bunk Bed Spring Mattress 90X200X15Cm", "BARCODE": "810806001486", "Item Code": "PO517238", "Sub Group": "Local Mattresses", "Total Qty": 4.0, "Reserved Qty": 0.0, "Free stock": 4.0, "0 TO 90 Qty": 4.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Genius Teens Bonnell Spring Mattress 90X200X21Cm", "BARCODE": "810806001487", "Item Code": "PO517239", "Sub Group": "Local Mattresses", "Total Qty": 5.0, "Reserved Qty": 0.0, "Free stock": 5.0, "0 TO 90 Qty": 5.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Fish Kids Bonnell Spring Mattres 120X200X19Cm", "BARCODE": "810806001488", "Item Code": "PO517240", "Sub Group": "Local Mattresses", "Total Qty": 7.0, "Reserved Qty": 0.0, "Free stock": 7.0, "0 TO 90 Qty": 7.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Smart Kids Pocket Spring Mattress with zip chain 9", "BARCODE": "810806001489", "Item Code": "PO517241", "Sub Group": "Local Mattresses", "Total Qty": 5.0, "Reserved Qty": 0.0, "Free stock": 5.0, "0 TO 90 Qty": 5.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Student Teens Foam Mattress 120X200X19Cm", "BARCODE": "810806001490", "Item Code": "PO517242", "Sub Group": "Local Mattresses", "Total Qty": 5.0, "Reserved Qty": 0.0, "Free stock": 5.0, "0 TO 90 Qty": 5.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Genius Teens Bonnell Spring Mattress 120X200X21Cm", "BARCODE": "810806001491", "Item Code": "PO517243", "Sub Group": "Local Mattresses", "Total Qty": 7.0, "Reserved Qty": 0.0, "Free stock": 7.0, "0 TO 90 Qty": 7.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}, {"Item Name": "Smart Kids Pocket Spring Mattress with zip chain 1", "BARCODE": "810806001492", "Item Code": "PO517244", "Sub Group": "Local Mattresses", "Total Qty": 5.0, "Reserved Qty": 0.0, "Free stock": 5.0, "0 TO 90 Qty": 5.0, "91 TO 150 Qty": 0.0, "151 TO 180 Qty": 0, "181 TO 365 Qty": 0.0, "365 Qty to 720 Qty": 0, ">720 Qty": 0}];
+
+const COLS = [
+  {key:'Item Name', label:'Item Name', cls:'itemname'},
+  {key:'BARCODE', label:'Barcode', cls:'code'},
+  {key:'Item Code', label:'Item Code', cls:'code'},
+  {key:'Sub Group', label:'Sub Group', cls:'sub'},
+  {key:'Total Qty', label:'Total Qty', cls:'num'},
+  {key:'Reserved Qty', label:'Reserved Qty', cls:'num'},
+  {key:'Free stock', label:'Free Stock', cls:'num'},
+  {key:'0 TO 90 Qty', label:'0–90d', cls:'num age', age:0},
+  {key:'91 TO 150 Qty', label:'91–150d', cls:'num age', age:1},
+  {key:'151 TO 180 Qty', label:'151–180d', cls:'num age', age:1},
+  {key:'181 TO 365 Qty', label:'181–365d', cls:'num age', age:2},
+  {key:'365 Qty to 720 Qty', label:'365–720d', cls:'num age', age:3},
+  {key:'>720 Qty', label:'>720d', cls:'num age', age:4},
+];
+
+const AGE_BG = ['#eaf3ec','#dcecdf','#fbe9cf','#f3cbb8','#eeada0'];
+const AGE_FG = ['#2f5943','#2f5943','#8a5a17','#8a3d24','#7a2718'];
+
+let data = RAW_DATA.map((r,i) => ({...r, __id:i}));
+let sortKey = 'Item Name';
+let sortDir = 1;
+let pinned = new Set();
+
+function fmt(n){
+  if (n === null || n === undefined || n === '') return '0';
+  const v = Number(n);
+  if (Number.isNaN(v)) return String(n);
+  const rounded = Math.round(v * 100) / 100;
+  return rounded.toLocaleString(undefined, {maximumFractionDigits:2});
+}
+
+function populateSubGroupFilter(){
+  const sel = document.getElementById('subGroupFilter');
+  const groups = [...new Set(data.map(d => d['Sub Group']).filter(Boolean))].sort();
+  groups.forEach(g => {
+    const opt = document.createElement('option');
+    opt.value = g; opt.textContent = g;
+    sel.appendChild(opt);
+  });
+}
+
+function renderStats(rows){
+  const total = rows.reduce((s,r)=>s+Number(r['Total Qty']||0),0);
+  const reserved = rows.reduce((s,r)=>s+Number(r['Reserved Qty']||0),0);
+  const free = rows.reduce((s,r)=>s+Number(r['Free stock']||0),0);
+  const aged = rows.reduce((s,r)=>s+Number(r['365 Qty to 720 Qty']||0)+Number(r['>720 Qty']||0),0);
+  const skus = rows.length;
+  const strip = document.getElementById('statStrip');
+  strip.innerHTML = `
+    <div class="stat"><div class="num">${fmt(total)}</div><div class="lbl">Total stock</div></div>
+    <div class="stat warn"><div class="num">${fmt(reserved)}</div><div class="lbl">Reserved stock</div></div>
+    <div class="stat"><div class="num">${fmt(free)}</div><div class="lbl">Free stock available</div></div>
+    <div class="stat risk"><div class="num">${fmt(aged)}</div><div class="lbl">Free stock &gt;365 days</div></div>
+    <div class="stat"><div class="num">${skus}</div><div class="lbl">SKU lines shown</div></div>
+  `;
+}
+
+function renderHead(){
+  const headRow = document.getElementById('headRow');
+  headRow.innerHTML = COLS.map(c => {
+    const arrow = sortKey === c.key ? (sortDir === 1 ? '▲' : '▼') : '';
+    return `<th class="${c.cls.includes('num')?'num':''}" data-key="${c.key}">${c.label}<span class="arrow">${arrow}</span></th>`;
+  }).join('');
+  headRow.querySelectorAll('th').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.key;
+      if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = 1; }
+      renderAll();
+    });
+  });
+}
+
+function getFiltered(){
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const sg = document.getElementById('subGroupFilter').value;
+  const ageBucket = document.getElementById('ageingFilter').value;
+  const mode = document.querySelector('.toggle-group button.active').dataset.mode;
+
+  return data.filter(r => {
+    if (q) {
+      const hay = `${r['Item Name']} ${r['BARCODE']} ${r['Item Code']}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    if (sg && r['Sub Group'] !== sg) return false;
+    if (ageBucket && !(Number(r[ageBucket] || 0) > 0)) return false;
+    if (mode === 'free' && !(Number(r['Free stock']) > 0)) return false;
+    if (mode === 'reserved' && !(Number(r['Reserved Qty']) > 0)) return false;
+    if (mode === 'aged' && !((Number(r['181 TO 365 Qty']||0) + Number(r['365 Qty to 720 Qty']||0) + Number(r['>720 Qty']||0)) > 0)) return false;
+    return true;
+  });
+}
+
+function sortRows(rows){
+  return rows.slice().sort((a,b) => {
+    const av = a[sortKey], bv = b[sortKey];
+    const an = Number(av), bn = Number(bv);
+    let cmp;
+    if (!Number.isNaN(an) && !Number.isNaN(bn) && av !== '' && bv !== '') {
+      cmp = an - bn;
+    } else {
+      cmp = String(av).localeCompare(String(bv));
+    }
+    return cmp * sortDir;
+  });
+}
+
+function renderBody(rows){
+  const tbody = document.getElementById('tableBody');
+  const emptyState = document.getElementById('emptyState');
+  if (rows.length === 0) {
+    tbody.innerHTML = '';
+    emptyState.style.display = 'block';
+    document.getElementById('stockTable').style.display = 'none';
+    return;
+  }
+  emptyState.style.display = 'none';
+  document.getElementById('stockTable').style.display = 'table';
+
+  tbody.innerHTML = rows.map(r => {
+    const sgClass = r['Sub Group'] === 'Local Mattresses' ? 'local' : 'imported';
+    const cells = COLS.map(c => {
+      if (c.key === 'Item Name') return `<td class="itemname">${r[c.key] ?? ''}</td>`;
+      if (c.key === 'Sub Group') return `<td><span class="badge ${sgClass}">${r[c.key] ?? ''}</span></td>`;
+      if (c.cls.includes('code')) return `<td class="code">${r[c.key] ?? ''}</td>`;
+      if (c.age !== undefined) {
+        const v = Number(r[c.key] || 0);
+        const style = v > 0 ? `background:${AGE_BG[c.age]};color:${AGE_FG[c.age]};font-weight:600;` : '';
+        return `<td class="age-cell" style="${style}">${fmt(v)}</td>`;
+      }
+      return `<td class="num">${fmt(r[c.key])}</td>`;
+    }).join('');
+    const pinnedClass = pinned.has(r.__id) ? ' pinned' : '';
+    return `<tr class="${pinnedClass.trim()}" data-id="${r.__id}">${cells}</tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('tr').forEach(tr => {
+    tr.addEventListener('click', () => {
+      const id = Number(tr.dataset.id);
+      if (pinned.has(id)) pinned.delete(id); else pinned.add(id);
+      tr.classList.toggle('pinned');
+    });
+  });
+}
+
+function renderFoot(rows){
+  const foot = document.getElementById('footRow');
+  const sums = {};
+  COLS.forEach(c => {
+    if (c.cls.includes('num')) {
+      sums[c.key] = rows.reduce((s,r)=>s+Number(r[c.key]||0),0);
+    }
+  });
+  foot.innerHTML = COLS.map(c => {
+    if (c.key === 'Item Name') return `<td class="itemname">Total (${rows.length} lines)</td>`;
+    if (c.key === 'BARCODE' || c.key === 'Item Code' || c.key === 'Sub Group') return `<td></td>`;
+    return `<td class="num">${fmt(sums[c.key])}</td>`;
+  }).join('');
+}
+
+function renderAll(){
+  const filtered = getFiltered();
+  const sorted = sortRows(filtered);
+  renderHead();
+  renderBody(sorted);
+  renderFoot(filtered);
+  renderStats(filtered);
+  document.getElementById('resultCount').textContent = `${filtered.length} of ${data.length} items`;
+}
+
+document.getElementById('searchInput').addEventListener('input', renderAll);
+document.getElementById('subGroupFilter').addEventListener('change', renderAll);
+document.getElementById('ageingFilter').addEventListener('change', renderAll);
+document.getElementById('clearHighlightBtn').addEventListener('click', () => {
+  pinned.clear();
+  renderAll();
+});
+document.querySelectorAll('.toggle-group button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.toggle-group button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    renderAll();
+  });
+});
+
+// ---------- Google Sheets Sync ----------
+const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTQhfgi37uaSypPo8OSy7A7t_PlGOKGHc9PmdyY_a7bpPZbMKI9_TNsi4wTPIEhMTZ96wUL-xLRQDIt/pub?gid=1156769162&single=true&output=csv';
+
+function setSyncStatus(type, message){
+  const el = document.getElementById('syncStatus');
+  el.className = `sync-status ${type || ''}`;
+  el.textContent = message;
+}
+
+function applyRows(json, sourceLabel){
+  const mapped = json
+    .filter(row => String(row['Branch Code'] ?? row['BranchCode'] ?? '').trim() === 'BDC-WMS')
+    .map((row, i) => ({
+      __id: i,
+      'Item Name': row['Item Name'] ?? '',
+      'BARCODE': String(row['BARCODE'] ?? ''),
+      'Item Code': row['Item Code'] ?? '',
+      'Sub Group': row['Sub Group'] ?? '',
+      'Total Qty': Number(row['Total Qty'] || 0),
+      'Reserved Qty': Number(row['Reserved Qty'] || 0),
+      'Free stock': Number(row['Free stock'] || 0),
+      '0 TO 90 Qty': Number(row['0 TO 90 Qty'] || 0),
+      '91 TO 150 Qty': Number(row['91 TO 150 Qty'] || 0),
+      '151 TO 180 Qty': Number(row['151 TO 180 Qty'] || 0),
+      '181 TO 365 Qty': Number(row['181 TO 365 Qty'] || 0),
+      '365 Qty to 720 Qty': Number(row['365 Qty to 720 Qty'] || 0),
+      '>720 Qty': Number(row['>720 Qty'] || 0),
+    }));
+
+  if (mapped.length === 0) {
+    throw new Error('No BDC-WMS rows found in the published Google Sheet.');
+  }
+
+  data = mapped;
+  pinned.clear();
+  document.getElementById('subGroupFilter').innerHTML = '<option value="">All sub groups</option>';
+  populateSubGroupFilter();
+  document.getElementById('metaLine').innerHTML =
+    `${sourceLabel} · Branch: BDC-WMS · <span id="loadedCount">${data.length}</span> items · Updated ${new Date().toLocaleString()}`;
+  renderAll();
+}
+
+async function syncFromGoogleSheet(){
+  const btn = document.getElementById('syncBtn');
+  btn.disabled = true;
+  btn.style.opacity = '0.65';
+  setSyncStatus('loading', 'Syncing…');
+  try {
+    const separator = GOOGLE_SHEET_CSV_URL.includes('?') ? '&' : '?';
+    const response = await fetch(`${GOOGLE_SHEET_CSV_URL}${separator}_=${Date.now()}`, {
+      method: 'GET',
+      cache: 'no-store',
+      redirect: 'follow'
+    });
+    if (!response.ok) throw new Error(`Google Sheets returned ${response.status}`);
+    const csvText = await response.text();
+    if (!csvText || csvText.trim().length < 10) throw new Error('The published Google Sheet returned no data.');
+
+    const wb = XLSX.read(csvText, {type:'string'});
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const json = XLSX.utils.sheet_to_json(sheet, {defval:0});
+    applyRows(json, 'Live Google Sheets data');
+    setSyncStatus('ok', `✓ Synced ${new Date().toLocaleTimeString()}`);
+  } catch (err) {
+    setSyncStatus('error', '✕ Sync failed');
+    console.error('Google Sheets sync failed:', err);
+  } finally {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+  }
+}
+
+document.getElementById('syncBtn').addEventListener('click', syncFromGoogleSheet);
+
+// ---------- Export ----------
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const rows = sortRows(getFiltered());
+  const exportRows = rows.map(r => ({
+    'Item Name': r['Item Name'],
+    'Barcode': r['BARCODE'],
+    'Item Code': r['Item Code'],
+    'Sub Group': r['Sub Group'],
+    'Total Qty': r['Total Qty'],
+    'Reserved Qty': r['Reserved Qty'],
+    'Free Stock': r['Free stock'],
+    '0 TO 90 Qty': r['0 TO 90 Qty'],
+    '91 TO 150 Qty': r['91 TO 150 Qty'],
+    '151 TO 180 Qty': r['151 TO 180 Qty'],
+    '181 TO 365 Qty': r['181 TO 365 Qty'],
+    '365 Qty to 720 Qty': r['365 Qty to 720 Qty'],
+    '>720 Qty': r['>720 Qty'],
+  }));
+  const ws = XLSX.utils.json_to_sheet(exportRows);
+  ws['!cols'] = [{wch:38},{wch:16},{wch:14},{wch:20},{wch:11},{wch:12},{wch:11},{wch:10},{wch:11},{wch:11},{wch:11},{wch:12},{wch:10}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'BDC-WMS Stock View');
+  const dateStr = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `BDC-WMS_Stock_Ageing_${dateStr}.xlsx`);
+});
+
+// ---------- Init ----------
+populateSubGroupFilter();
+renderAll();
+// Automatically load the latest published Google Sheet data when the page opens.
+syncFromGoogleSheet();
+</script>
+</body>
+</html>
